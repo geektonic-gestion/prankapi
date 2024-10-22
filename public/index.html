@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Realtime API Command Centre</title>
+        <style>
+            body {
+                font-family: "Arial", sans-serif;
+                background-color: #e8f1f8;
+                color: #333333;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-height: 100vh;
+                margin: 0;
+                padding: 20px;
+            }
+            h1 {
+                text-align: center;
+                color: #002366;
+                font-size: 3em;
+                margin-bottom: 20px;
+            }
+            .container {
+                background-color: #ffffff;
+                padding: 40px;
+                border-radius: 10px;
+                box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+                width: 100%;
+                max-width: 600px;
+                margin-bottom: 20px;
+            }
+            label {
+                display: block;
+                margin-top: 15px;
+                font-weight: bold;
+                color: #002366;
+            }
+            input,
+            textarea,
+            select {
+                width: calc(100% - 20px);
+                padding: 10px;
+                margin-top: 5px;
+                margin-bottom: 15px;
+                border: 1px solid #b0bec5;
+                border-radius: 5px;
+                background-color: #ffffff;
+                color: #333333;
+            }
+            button {
+                background-color: #007bff;
+                color: #ffffff;
+                padding: 15px 30px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 1em;
+                transition: background-color 0.3s ease;
+                width: 100%;
+            }
+            button:hover {
+                background-color: #0056b3;
+            }
+            #log-container {
+                background-color: #f8f9fa;
+                border: 1px solid #ced4da;
+                padding: 15px;
+                border-radius: 10px;
+                width: 100%;
+                max-width: 600px;
+                height: 300px;
+                overflow-y: auto;
+            }
+            .log-entry {
+                font-family: monospace;
+                padding: 5px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            .log-entry:nth-child(odd) {
+                background-color: #f9f9f9;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Realtime API Command Centre 🪖</h1>
+        <div class="container">
+            <form id="config-form">
+                <label for="system_message">System Message:</label>
+                <textarea
+                    id="system_message"
+                    name="system_message"
+                    rows="4"
+                    cols="50"
+                ></textarea>
+
+                <label for="voice">Voice:</label>
+                <select id="voice" name="voice">
+                    <option value="alloy">Alloy</option>
+                    <option value="echo">Echo</option>
+                    <option value="fable">Fable</option>
+                    <option value="onyx">Onyx</option>
+                    <option value="nova">Nova</option>
+                    <option value="shimmer">Shimmer</option>
+                </select>
+
+                <label for="silence_timeout">Silence Timeout (ms):</label>
+                <input
+                    type="number"
+                    id="silence_timeout"
+                    name="silence_timeout"
+                />
+
+                <label for="threshold">Threshold:</label>
+                <input
+                    type="number"
+                    id="threshold"
+                    name="threshold"
+                    step="0.1"
+                />
+
+                <button type="button" onclick="updateConfig()">
+                    Update Configuration
+                </button>
+            </form>
+        </div>
+
+        <div id="log-container">
+            <h3>Real-time Logs</h3>
+            <div id="log-stream"></div>
+        </div>
+
+        <script>
+            // Fetch the current configuration and populate the form
+            async function fetchConfig() {
+                try {
+                    console.log("Fetching current configuration...");
+                    const response = await fetch("/get-config");
+                    if (!response.ok) {
+                        throw new Error(
+                            `HTTP error! Status: ${response.status}`,
+                        );
+                    }
+                    const config = await response.json();
+                    console.log("Fetched configuration:", config);
+
+                    document.getElementById("system_message").value =
+                        config.SYSTEM_MESSAGE || "";
+                    document.getElementById("voice").value = config.VOICE || "";
+                    document.getElementById("silence_timeout").value =
+                        config.SILENCE_TIMEOUT || "";
+                    document.getElementById("threshold").value =
+                        config.THRESHOLD || "";
+                } catch (error) {
+                    console.error("Error fetching configuration:", error);
+                }
+            }
+
+            // Call the fetchConfig function when the page loads
+            document.addEventListener("DOMContentLoaded", fetchConfig);
+
+            // Function to update the configuration
+            async function updateConfig() {
+                const config = {
+                    system_message:
+                        document.getElementById("system_message").value,
+                    voice: document.getElementById("voice").value,
+                    silence_timeout:
+                        document.getElementById("silence_timeout").value,
+                    threshold: document.getElementById("threshold").value,
+                };
+
+                try {
+                    console.log("Updating configuration with:", config);
+                    const response = await fetch("/update-config", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(config),
+                    });
+
+                    if (response.ok) {
+                        alert("Configuration updated successfully!");
+                        fetchConfig(); // Update the UI with the latest config
+                    } else {
+                        alert("Failed to update configuration");
+                    }
+                } catch (error) {
+                    alert("Error: " + error.message);
+                }
+            }
+
+            // Connect to the WebSocket to stream logs
+            const logSocket = new WebSocket(
+                `ws://${window.location.host}/log-stream`,
+            );
+
+            logSocket.onmessage = function (event) {
+                const data = JSON.parse(event.data);
+                const logStream = document.getElementById("log-stream");
+
+                // Create a new log entry
+                const logEntry = document.createElement("div");
+                logEntry.className = "log-entry";
+                logEntry.style.marginBottom = "10px";
+
+                // Format timestamp and message
+                const timestamp = new Date(data.timestamp).toLocaleTimeString();
+                logEntry.innerHTML = `<strong>[${timestamp}]</strong> ${data.message}`;
+
+                // Append log entry to the log stream
+                logStream.appendChild(logEntry);
+
+                // Scroll to the bottom of the log container to see the latest logs
+                logStream.scrollTop = logStream.scrollHeight;
+            };
+        </script>
+    </body>
+</html>

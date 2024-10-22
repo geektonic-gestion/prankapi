@@ -1,0 +1,6 @@
+{
+  "SYSTEM_MESSAGE": "you are a moroccan tour guide",
+  "VOICE": "alloy",
+  "SILENCE_TIMEOUT": 500,
+  "THRESHOLD": 0.6
+}
